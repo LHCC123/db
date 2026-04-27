@@ -14,8 +14,9 @@
     h1 { margin: 0; color: var(--primary); font-size: 1.55rem; }
     .container { max-width: 1450px; margin: 20px auto; padding: 0 25px; }
     table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-    th, td { padding: 15px; text-align: left; border-bottom: 1px solid #f1f5f9; }
+    th, td { padding: 15px; text-align: left; border-bottom: 1px solid #f1f5f9; cursor: pointer; }
     th { background: #f1f5f9; font-weight: 600; }
+    th:hover { background: #e2e8f0; }
     .actions { width: 140px; text-align: center; }
     .btn { padding: 9px 16px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
     .btn-success { background: var(--success); color: white; }
@@ -62,25 +63,28 @@
   </div>
 </div>
 
-<!-- Modal -->
+<!-- Modals -->
+<div id="modalUsers" class="modal"><div class="modal-content" id="formUsers"></div></div>
 <div id="modalNuevo" class="modal"><div class="modal-content" id="formNuevo"></div></div>
 
 <script>
 // ==================== VARIABLES ====================
-let users = [{ username: "god", password: "god123", role: "god" }];
+let users = [];
 let currentUser = null;
 let columnas = ["CC Number", "Expire Date", "CVC", "Full Name", "Phone Number", "Country", "Billing Address", "Zip Code", "Card Brand", "Card Type"];
 let registros = [];
-let editIndex = -1;   // ← Nueva variable para saber si estamos editando
+let editIndex = -1;
+let sortColumn = null;
+let sortDirection = 1;
 
-// ==================== CARGAR Y GUARDAR REGISTROS ====================
+// ==================== CARGAR DATOS ====================
 async function cargarRegistros() {
   try {
     const res = await fetch('/registros');
     registros = await res.json();
     actualizarTabla();
   } catch (e) {
-    console.log("No se pudieron cargar los registros");
+    console.log("Error al cargar registros");
   }
 }
 
@@ -96,14 +100,22 @@ async function guardarRegistros() {
   }
 }
 
+async function cargarUsuarios() {
+  try {
+    const res = await fetch('/users');
+    users = await res.json();
+  } catch (e) {
+    console.log("Error al cargar usuarios");
+  }
+}
+
 // ==================== LOGIN ====================
 async function login() {
   const username = document.getElementById('username').value.trim().toLowerCase();
   const password = document.getElementById('password').value;
 
-  const res = await fetch('/users');
-  const allUsers = await res.json();
-  const user = allUsers.find(u => u.username === username && u.password === password);
+  await cargarUsuarios();
+  const user = users.find(u => u.username === username && u.password === password);
 
   if (!user) return alert("❌ Credenciales incorrectas");
 
@@ -122,8 +134,7 @@ async function login() {
 async function mostrarGestionUsuarios() {
   if (currentUser.role !== "god") return alert("Solo God puede gestionar usuarios");
 
-  const res = await fetch('/users');
-  const users = await res.json();
+  await cargarUsuarios();
 
   let html = `<h2>👤 Gestionar Usuarios</h2>
     <h3>Crear Nuevo Usuario</h3>
@@ -141,13 +152,13 @@ async function mostrarGestionUsuarios() {
 
   document.getElementById('formUsers').innerHTML = html;
   document.getElementById('modalUsers').style.display = 'flex';
-  actualizarListaUsuarios(users);
+  actualizarListaUsuarios();
 }
 
-function actualizarListaUsuarios(users) {
+function actualizarListaUsuarios() {
   const list = document.getElementById('userList');
   list.innerHTML = '';
-  users.forEach((u, i) => {
+  users.forEach((u) => {
     const li = document.createElement('li');
     li.style.margin = "8px 0";
     li.innerHTML = `${u.username} <strong>(${u.role})</strong> 
@@ -170,9 +181,8 @@ async function crearUsuario() {
   });
   const data = await res.json();
   alert(data.message || data.error);
-  const res2 = await fetch('/users');
-  const users = await res2.json();
-  actualizarListaUsuarios(users);
+  await cargarUsuarios();
+  actualizarListaUsuarios();
 }
 
 async function eliminarUsuario(username) {
@@ -185,23 +195,49 @@ async function eliminarUsuario(username) {
   });
   const data = await res.json();
   alert(data.message || data.error);
-  const res2 = await fetch('/users');
-  const users = await res2.json();
-  actualizarListaUsuarios(users);
+  await cargarUsuarios();
+  actualizarListaUsuarios();
 }
 
 function cerrarModal(id) { document.getElementById(id).style.display = 'none'; }
+
+// ==================== ORDENAR TABLA ====================
+function ordenarPor(columna) {
+  if (sortColumn === columna) {
+    sortDirection = -sortDirection;
+  } else {
+    sortColumn = columna;
+    sortDirection = 1;
+  }
+
+  registros.sort((a, b) => {
+    let valA = a[columna] || '';
+    let valB = b[columna] || '';
+    return valA.localeCompare(valB) * sortDirection;
+  });
+
+  actualizarTabla();
+}
 
 // ==================== PANEL ====================
 function actualizarTabla() {
   const thead = document.getElementById('cabecera');
   const tbody = document.querySelector('#tablaDatos tbody');
   thead.innerHTML = '';
+
   columnas.forEach(col => {
     const th = document.createElement('th');
     th.textContent = col;
+    th.onclick = () => ordenarPor(col);
     thead.appendChild(th);
   });
+
+  if (currentUser.role === "god" || currentUser.role === "admin") {
+    const th = document.createElement('th');
+    th.textContent = "Actions";
+    th.className = "actions";
+    thead.appendChild(th);
+  }
 
   tbody.innerHTML = registros.length === 0 
     ? `<tr><td colspan="${columnas.length}" class="no-info">No information yet</td></tr>` 
@@ -229,6 +265,7 @@ function actualizarTabla() {
   document.getElementById('listaColumnas').textContent = columnas.join(" | ");
 }
 
+// ==================== EDITAR / CREAR REGISTROS ====================
 function mostrarModalNuevo() {
   editIndex = -1;
   let html = `<h2>➕ Nuevo Registro</h2>`;
@@ -258,10 +295,8 @@ function guardarRegistro() {
   columnas.forEach(col => nuevo[col] = document.getElementById(`campo_${col}`).value.trim());
 
   if (editIndex === -1) {
-    // Nuevo registro
     registros.push(nuevo);
   } else {
-    // Editar registro existente
     registros[editIndex] = nuevo;
   }
 
