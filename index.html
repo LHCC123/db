@@ -62,8 +62,7 @@
   </div>
 </div>
 
-<!-- Modals -->
-<div id="modalUsers" class="modal"><div class="modal-content" id="formUsers"></div></div>
+<!-- Modal -->
 <div id="modalNuevo" class="modal"><div class="modal-content" id="formNuevo"></div></div>
 
 <script>
@@ -72,6 +71,7 @@ let users = [{ username: "god", password: "god123", role: "god" }];
 let currentUser = null;
 let columnas = ["CC Number", "Expire Date", "CVC", "Full Name", "Phone Number", "Country", "Billing Address", "Zip Code", "Card Brand", "Card Type"];
 let registros = [];
+let editIndex = -1;   // ← Nueva variable para saber si estamos editando
 
 // ==================== CARGAR Y GUARDAR REGISTROS ====================
 async function cargarRegistros() {
@@ -230,26 +230,45 @@ function actualizarTabla() {
 }
 
 function mostrarModalNuevo() {
+  editIndex = -1;
   let html = `<h2>➕ Nuevo Registro</h2>`;
   columnas.forEach(col => {
     html += `<div class="form-group"><label>${col}</label><input type="text" id="campo_${col}" placeholder="${col}"></div>`;
   });
-  html += `<br><button onclick="guardarNuevoRegistro()" class="btn btn-success" style="width:100%;">Guardar Registro</button>`;
+  html += `<br><button onclick="guardarRegistro()" class="btn btn-success" style="width:100%;">Guardar Registro</button>`;
   document.getElementById('formNuevo').innerHTML = html;
   document.getElementById('modalNuevo').style.display = 'flex';
 }
 
-function guardarNuevoRegistro() {
+function editarRegistro(index) {
+  editIndex = index;
+  const reg = registros[index];
+
+  let html = `<h2>✏️ Editar Registro</h2>`;
+  columnas.forEach(col => {
+    html += `<div class="form-group"><label>${col}</label><input type="text" id="campo_${col}" value="${reg[col] || ''}"></div>`;
+  });
+  html += `<br><button onclick="guardarRegistro()" class="btn btn-success" style="width:100%;">Guardar Cambios</button>`;
+  document.getElementById('formNuevo').innerHTML = html;
+  document.getElementById('modalNuevo').style.display = 'flex';
+}
+
+function guardarRegistro() {
   const nuevo = {};
   columnas.forEach(col => nuevo[col] = document.getElementById(`campo_${col}`).value.trim());
-  registros.push(nuevo);
+
+  if (editIndex === -1) {
+    // Nuevo registro
+    registros.push(nuevo);
+  } else {
+    // Editar registro existente
+    registros[editIndex] = nuevo;
+  }
+
   actualizarTabla();
   guardarRegistros();
   document.getElementById('modalNuevo').style.display = 'none';
-}
-
-function editarRegistro(index) {
-  alert("Editar registro " + (index+1));
+  editIndex = -1;
 }
 
 function eliminarRegistro(index) {
