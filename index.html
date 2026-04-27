@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Private Database</title>
+  <style>
+    :root { --primary: #2563eb; --success: #16a34a; --danger: #ef4444; --warning: #f59e0b; }
+    body { font-family: 'Segoe UI', sans-serif; margin:0; padding:0; background: linear-gradient(135deg, #f8fafc, #e0e7ff); }
+    .login-screen { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 2000; }
+    .login-box { background: white; padding: 50px 40px; border-radius: 24px; width: 100%; max-width: 420px; box-shadow: 0 25px 60px rgba(0,0,0,0.35); text-align: center; }
+    .app { display: none; }
+    header { background: white; padding: 0.9rem 2rem; box-shadow: 0 2px 12px rgba(0,0,0,0.08); display: flex; justify-content: space-between; align-items: center; }
+    h1 { margin: 0; color: var(--primary); font-size: 1.55rem; }
+    .container { max-width: 1450px; margin: 20px auto; padding: 0 25px; }
+    table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+    th, td { padding: 15px; text-align: left; border-bottom: 1px solid #f1f5f9; }
+    th { background: #f1f5f9; font-weight: 600; }
+    .actions { width: 140px; text-align: center; }
+    .btn { padding: 9px 16px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
+    .btn-success { background: var(--success); color: white; }
+    .btn-danger { background: var(--danger); color: white; }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+    .modal-content { background: white; padding: 30px; border-radius: 16px; width: 100%; max-width: 550px; max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen" class="login-screen">
+  <div class="login-box">
+    <h1>🔒 Private Database</h1>
+    <input type="text" id="username" placeholder="Usuario" autofocus>
+    <input type="password" id="password" placeholder="Contraseña">
+    <button onclick="login()" style="width:100%; padding:16px;">Entrar</button>
+  </div>
+</div>
+
+<!-- PANEL -->
+<div id="appScreen" class="app">
+  <header>
+    <h1>Private Database</h1>
+    <div>
+      <span id="roleDisplay" style="font-weight:bold; margin-right:15px;"></span>
+      <button id="btnManage" onclick="mostrarGestionUsuarios()" style="display:none;" class="btn" style="background:#f59e0b;">👤 Gestionar Usuarios</button>
+      <button onclick="logout()" class="btn btn-danger">Logout</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div style="margin-bottom:20px;">
+      <strong>Columnas:</strong> <span id="listaColumnas"></span>
+    </div>
+
+    <input type="text" id="buscador" placeholder="🔎 Buscar..." onkeyup="filtrarTabla()">
+    <button id="btnNuevo" class="btn btn-success" onclick="mostrarModalNuevo()" style="display:none;">+ Nuevo Registro</button>
+
+    <table id="tablaDatos" style="margin-top:20px;">
+      <thead><tr id="cabecera"></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal Gestionar Usuarios -->
+<div id="modalUsers" class="modal"><div class="modal-content" id="formUsers"></div></div>
+
+<!-- Modal Nuevo Registro -->
+<div id="modalNuevo" class="modal"><div class="modal-content" id="formNuevo"></div></div>
+
+<script>
+// ==================== VARIABLES GLOBALES ====================
+let users = [
+  { username: "god", password: "god123", role: "god" }
+];
+
+let currentUser = null;
+let columnas = ["CC Number", "Expire Date", "CVC", "Full Name", "Phone Number", "Country", "Billing Address", "Zip Code", "Card Brand", "Card Type"];
+let registros = [];  // <-- SOLO SE DECLARA UNA VEZ AQUÍ
+
+// ==================== LOGIN ====================
+async function login() {
+  const username = document.getElementById('username').value.trim().toLowerCase();
+  const password = document.getElementById('password').value;
+
+  const res = await fetch('/users');
+  const users = await res.json();
+  const user = users.find(u => u.username === username && u.password === password);
+
+  if (!user) return alert("❌ Credenciales incorrecta");
+
+  currentUser = user;
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display = 'block';
+
+  document.getElementById('roleDisplay').textContent = user.role.toUpperCase();
+  document.getElementById('btnNuevo').style.display = (user.role === "god" || user.role === "admin") ? 'inline-block' : 'none';
+  document.getElementById('btnManage').style.display = user.role === "god" ? 'inline-block' : 'none';
+
+  actualizarTabla();
+}
+
+// ==================== GESTIÓN DE USUARIOS (SOLO GOD) ====================
+async function mostrarGestionUsuarios() {
+  if (currentUser.role !== "god") return alert("Solo God puede gestionar usuarios");
+
+  const res = await fetch('/users');
+  const users = await res.json();
+
+  let html = `<h2>👤 Gestionar Usuarios</h2>
+    <h3>Crear Nuevo Usuario</h3>
+    <input type="text" id="newUsername" placeholder="Username">
+    <input type="password" id="newPassword" placeholder="Password">
+    <select id="newRole">
+      <option value="user">User</option>
+      <option value="admin">Administrator</option>
+    </select>
+    <button onclick="crearUsuario()" class="btn btn-success" style="width:100%; margin:10px 0;">Crear Usuario</button>
+    <hr>
+    <h3>Usuarios Existentes</h3>
+    <ul id="userList" style="list-style:none; padding:0; max-height:300px; overflow-y:auto;"></ul>
+    <button onclick="cerrarModal('modalUsers')" class="btn btn-danger" style="width:100%; margin-top:15px;">Cerrar</button>`;
+
+  document.getElementById('formUsers').innerHTML = html;
+  document.getElementById('modalUsers').style.display = 'flex';
+  actualizarListaUsuarios(users);
+}
+
+function actualizarListaUsuarios(users) {
+  const list = document.getElementById('userList');
+  list.innerHTML = '';
+  users.forEach((u, i) => {
+    const li = document.createElement('li');
+    li.style.margin = "8px 0";
+    li.innerHTML = `${u.username} <strong>(${u.role})</strong> 
+      ${u.username !== "god" ? `<button onclick="eliminarUsuario('${u.username}')" class="btn btn-danger" style="padding:4px 10px; font-size:0.85em;">Eliminar</button>` : '(Protegido)'}`;
+    list.appendChild(li);
+  });
+}
+
+async function crearUsuario() {
+  const username = document.getElementById('newUsername').value.trim().toLowerCase();
+  const password = document.getElementById('newPassword').value;
+  const role = document.getElementById('newRole').value;
+
+  if (!username || !password) return alert("Completa todos los campos");
+
+  const res = await fetch('/create_user', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({username, password, role})
+  });
+  const data = await res.json();
+  alert(data.message || data.error);
+  const res2 = await fetch('/users');
+  const users = await res2.json();
+  actualizarListaUsuarios(users);
+}
+
+async function eliminarUsuario(username) {
+  if (!confirm(`¿Eliminar al usuario "${username}"?`)) return;
+
+  const res = await fetch('/delete_user', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({username})
+  });
+  const data = await res.json();
+  alert(data.message || data.error);
+  const res2 = await fetch('/users');
+  const users = await res2.json();
+  actualizarListaUsuarios(users);
+}
+
+function cerrarModal(id) { document.getElementById(id).style.display = 'none'; }
+
+// ==================== PANEL (FUNCIONAL) ====================
+function actualizarTabla() {
+  const thead = document.getElementById('cabecera');
+  const tbody = document.querySelector('#tablaDatos tbody');
+  thead.innerHTML = '';
+  columnas.forEach(col => {
+    const th = document.createElement('th');
+    th.textContent = col;
+    thead.appendChild(th);
+  });
+
+  tbody.innerHTML = registros.length === 0 
+    ? `<tr><td colspan="${columnas.length}" class="no-info">No information yet</td></tr>` 
+    : '';
+
+  registros.forEach((reg, index) => {
+    const tr = document.createElement('tr');
+    columnas.forEach(col => {
+      const td = document.createElement('td');
+      td.textContent = reg[col] || '';
+      tr.appendChild(td);
+    });
+
+    if (currentUser.role === "god" || currentUser.role === "admin") {
+      const td = document.createElement('td');
+      td.className = "actions";
+      td.innerHTML = `
+        <button class="btn btn-warning" onclick="editarRegistro(${index})">✏️</button>
+        <button class="btn btn-danger" onclick="eliminarRegistro(${index})">🗑️</button>`;
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('listaColumnas').textContent = columnas.join(" | ");
+}
+
+function mostrarModalNuevo() {
+  let html = `<h2>➕ Nuevo Registro</h2>`;
+  columnas.forEach(col => {
+    html += `<div class="form-group"><label>${col}</label><input type="text" id="campo_${col}" placeholder="${col}"></div>`;
+  });
+  html += `<br><button onclick="guardarNuevoRegistro()" class="btn btn-success" style="width:100%;">Guardar Registro</button>`;
+  document.getElementById('formNuevo').innerHTML = html;
+  document.getElementById('modalNuevo').style.display = 'flex';
+}
+
+function guardarNuevoRegistro() {
+  const nuevo = {};
+  columnas.forEach(col => nuevo[col] = document.getElementById(`campo_${col}`).value.trim());
+  registros.push(nuevo);
+  actualizarTabla();
+  document.getElementById('modalNuevo').style.display = 'none';
+}
+
+function editarRegistro(index) {
+  alert("Editar registro " + (index+1));
+}
+
+function eliminarRegistro(index) {
+  if (confirm("¿Eliminar este registro?")) {
+    registros.splice(index, 1);
+    actualizarTabla();
+  }
+}
+
+function filtrarTabla() { actualizarTabla(); }
+function logout() { location.reload(); }
+
+// Inicio
+window.onload = () => document.getElementById('password').focus();
+</script>
+</body>
+</html>
