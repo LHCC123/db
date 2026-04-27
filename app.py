@@ -60,6 +60,25 @@ def delete_user():
 
     return jsonify({"message": f"Usuario '{username}' eliminado"})
 
+# ==================== REGISTROS ====================
+REGISTROS_FILE = 'registros.json'
+
+if not os.path.exists(REGISTROS_FILE):
+    with open(REGISTROS_FILE, 'w') as f:
+        json.dump([], f)
+
+@app.route('/registros', methods=['GET'])
+def get_registros():
+    with open(REGISTROS_FILE, 'r') as f:
+        return jsonify(json.load(f))
+
+@app.route('/save_registros', methods=['POST'])
+def save_registros():
+    data = request.json
+    with open(REGISTROS_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
+    return jsonify({"message": "Registros guardados correctamente"})
+
 if __name__ == '__main__':
     import os
     port = int(os.environ.get("PORT", 5000))

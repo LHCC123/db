@@ -62,21 +62,39 @@
   </div>
 </div>
 
-<!-- Modal Gestionar Usuarios -->
+<!-- Modals -->
 <div id="modalUsers" class="modal"><div class="modal-content" id="formUsers"></div></div>
-
-<!-- Modal Nuevo Registro -->
 <div id="modalNuevo" class="modal"><div class="modal-content" id="formNuevo"></div></div>
 
 <script>
-// ==================== VARIABLES GLOBALES ====================
-let users = [
-  { username: "god", password: "god123", role: "god" }
-];
-
+// ==================== VARIABLES ====================
+let users = [{ username: "god", password: "god123", role: "god" }];
 let currentUser = null;
 let columnas = ["CC Number", "Expire Date", "CVC", "Full Name", "Phone Number", "Country", "Billing Address", "Zip Code", "Card Brand", "Card Type"];
-let registros = [];  // <-- SOLO SE DECLARA UNA VEZ AQUÍ
+let registros = [];
+
+// ==================== CARGAR Y GUARDAR REGISTROS ====================
+async function cargarRegistros() {
+  try {
+    const res = await fetch('/registros');
+    registros = await res.json();
+    actualizarTabla();
+  } catch (e) {
+    console.log("No se pudieron cargar los registros");
+  }
+}
+
+async function guardarRegistros() {
+  try {
+    await fetch('/save_registros', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(registros)
+    });
+  } catch (e) {
+    console.log("Error al guardar registros");
+  }
+}
 
 // ==================== LOGIN ====================
 async function login() {
@@ -84,10 +102,10 @@ async function login() {
   const password = document.getElementById('password').value;
 
   const res = await fetch('/users');
-  const users = await res.json();
-  const user = users.find(u => u.username === username && u.password === password);
+  const allUsers = await res.json();
+  const user = allUsers.find(u => u.username === username && u.password === password);
 
-  if (!user) return alert("❌ Credenciales incorrecta");
+  if (!user) return alert("❌ Credenciales incorrectas");
 
   currentUser = user;
   document.getElementById('loginScreen').style.display = 'none';
@@ -97,10 +115,10 @@ async function login() {
   document.getElementById('btnNuevo').style.display = (user.role === "god" || user.role === "admin") ? 'inline-block' : 'none';
   document.getElementById('btnManage').style.display = user.role === "god" ? 'inline-block' : 'none';
 
-  actualizarTabla();
+  await cargarRegistros();
 }
 
-// ==================== GESTIÓN DE USUARIOS (SOLO GOD) ====================
+// ==================== GESTIÓN DE USUARIOS ====================
 async function mostrarGestionUsuarios() {
   if (currentUser.role !== "god") return alert("Solo God puede gestionar usuarios");
 
@@ -174,7 +192,7 @@ async function eliminarUsuario(username) {
 
 function cerrarModal(id) { document.getElementById(id).style.display = 'none'; }
 
-// ==================== PANEL (FUNCIONAL) ====================
+// ==================== PANEL ====================
 function actualizarTabla() {
   const thead = document.getElementById('cabecera');
   const tbody = document.querySelector('#tablaDatos tbody');
@@ -226,6 +244,7 @@ function guardarNuevoRegistro() {
   columnas.forEach(col => nuevo[col] = document.getElementById(`campo_${col}`).value.trim());
   registros.push(nuevo);
   actualizarTabla();
+  guardarRegistros();
   document.getElementById('modalNuevo').style.display = 'none';
 }
 
@@ -237,14 +256,18 @@ function eliminarRegistro(index) {
   if (confirm("¿Eliminar este registro?")) {
     registros.splice(index, 1);
     actualizarTabla();
+    guardarRegistros();
   }
 }
 
 function filtrarTabla() { actualizarTabla(); }
 function logout() { location.reload(); }
 
-// Inicio
-window.onload = () => document.getElementById('password').focus();
+// ==================== INICIO ====================
+window.onload = () => {
+  cargarRegistros();
+  document.getElementById('password').focus();
+};
 </script>
 </body>
 </html>
